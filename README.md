@@ -6,6 +6,7 @@ Este projeto tem como objetivo o desenvolvimento de uma **calculadora de custo d
 
 ## 🚀 Tecnologias Utilizadas
 - **JavaScript (JS)**
+- **React.Js**
 - **Node.js**
 - **MongoDB**
 - **dotenv (.env)** para variáveis de ambiente
