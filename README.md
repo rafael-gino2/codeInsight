@@ -16,9 +16,8 @@ Este projeto tem como objetivo o desenvolvimento de uma **calculadora de custo d
 ## 🎯 Objetivos do Projeto
 1. **Banco de Dados Inicial**  
    - Criar um banco de dados organizado com os materiais utilizados na fábrica.  
-   - A base é construída a partir de:  
-     - Uma **planilha Excel** estruturada, contendo itens, valores e históricos de compras.  
-     - Informações extraídas de **notas fiscais (PDF)** dos últimos 3 meses.  
+   - A base é construída a partir de:   
+     - Informações extraídas de **notas fiscais (XLM)** dos últimos 3 meses.  
 
 2. **Sistema Pronto para Inclusão**  
    - Estrutura da calculadora e do banco de dados pronta para:  
