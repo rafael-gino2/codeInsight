@@ -5,7 +5,6 @@ import morgan from 'morgan';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import xml2js from 'xml2js'; // novo
-import Tesseract from 'tesseract.js';
 import xlsx from 'xlsx';
 import fs from 'fs';
 import path from 'path';
@@ -141,7 +140,21 @@ const computeProductCost = async (productId) => {
   if (!p) throw new Error('Produto não encontrado.');
   let total = 0;
   for (const item of p.bom) {
-    total += await lifoCost(item.material._id, item.qty);
+    const bomQty = item.qty;
+    const bomUnit = item.material.unit; // unidade do material
+    const mat = item.material;
+
+    let requiredQty = bomQty;
+    if (mat.unit !== 'un') {
+      try {
+        requiredQty = convertUnit(bomQty, 'un', mat.unit); // considera que BOM está em "un"
+      } catch (e) {
+        console.warn(`Erro de conversão de unidade para material ${mat.name}: ${e.message}`);
+      }
+    }
+
+    total += await lifoCost(mat._id, requiredQty);
+
   }
   p.lastComputedCost = total;
   p.lastComputedAt = new Date();
@@ -231,7 +244,8 @@ app.post('/upload/invoice-xml', upload.single('file'), async (req, res) => {
         materialCode: prod.cProd?.trim() || '',
         qty: parseBRLNumber(prod.qCom),
         unitCost: parseBRLNumber(prod.vUnCom),
-        total: parseBRLNumber(prod.vProd)
+        total: parseBRLNumber(prod.vProd),
+        unit: prod.uCom?.trim().toLowerCase() || 'un' // <- aqui capturamos a unidade
       };
     });
 
@@ -244,7 +258,10 @@ app.post('/upload/invoice-xml', upload.single('file'), async (req, res) => {
       if (!it.materialName || !it.qty || !it.unitCost) continue;
       let mat = await Material.findOne({ code: it.materialCode });
       if (!mat) mat = await Material.findOne({ name: it.materialName });
-      if (!mat) mat = await Material.create({ name: it.materialName, code: it.materialCode, unit: 'un' });
+      if (!mat) {
+        mat = await Material.create({ name: it.materialName, code: it.materialCode, unit: it.unit });
+      }
+
 
       await Batch.create({
         material: mat._id,
@@ -288,9 +305,32 @@ app.get('/materials', async (_req, res) => {
 });
 
 app.post('/materials', async (req, res) => {
-  const { code, name, unit } = req.body;
-  const m = await Material.create({ code, name, unit });
-  res.json(m);
+  try {
+    const { code, name, unit, cost, qty } = req.body;
+
+    // cria material
+    let m = await Material.create({ code, name, unit });
+
+    // se o usuário informou custo (e opcionalmente qtd)
+    if (cost != null && !isNaN(cost)) {
+      const q = qty && qty > 0 ? qty : 1; // se não informar, assume 1
+      await Batch.create({
+        material: m._id,
+        qty: q,
+        unitCost: cost,
+        remainingQty: q,
+        date: new Date(),
+        invoiceRef: 'MANUAL'
+      });
+    }
+
+    // recalcula produtos que dependem desse material
+    await recomputeImpactedProducts([m._id]);
+
+    res.json(m);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
 // 4) Produtos (BOM) e custo
