@@ -26,11 +26,13 @@ await mongoose.connect(MONGODB_URI);
 
 /* ---------- Schemas ---------- */
 const MaterialSchema = new mongoose.Schema({
-  ncm: { type: String, index: true },  // <- aqui
+  ncm: { type: String, index: true },
   code: { type: String, index: true },
   name: { type: String, required: true },
   unit: { type: String, default: 'un' },
+  isOfficial: { type: Boolean, default: false }  // 👈 novo campo
 }, { timestamps: true });
+
 
 
 const BatchSchema = new mongoose.Schema({
@@ -249,35 +251,20 @@ app.post('/upload/invoice-xml', upload.single('file'), async (req, res) => {
     for (const it of lines) {
       if (!it.materialName || !it.qty || !it.unitCost) continue;
 
-      let mat = null;
-
-      if (it.ncm) {
-        mat = await Material.findOne({ ncm: it.ncm });
-      }
-
-      if (!mat && it.code) {
-        mat = await Material.findOne({ code: it.code });
-      }
+      let mat = await Material.findOne({ ncm: it.ncm, name: it.materialName });
 
       if (!mat) {
-        mat = await Material.findOne({ name: it.materialName });
-      }
+        const jaTemOficial = await Material.findOne({ ncm: it.ncm, isOfficial: true });
 
-      if (!mat) {
-        // cria novo material com esse NCM
         mat = await Material.create({
           ncm: it.ncm,
           code: it.materialCode,
           name: it.materialName,
-          unit: it.unit
+          unit: it.unit,
+          isOfficial: !jaTemOficial // 👈 só o primeiro do NCM vira oficial
         });
-      } else {
-        // se já existir, pode atualizar o nome para o mais recente
-        if (it.materialName && mat.name !== it.materialName) {
-          mat.name = it.materialName;
-          await mat.save();
-        }
       }
+
 
       await Batch.create({
         material: mat._id,
@@ -303,21 +290,31 @@ app.post('/upload/invoice-xml', upload.single('file'), async (req, res) => {
 // 3) Materiais CRUD
 app.get('/materials', async (_req, res) => {
   const items = await Material.find().sort({ name: 1 });
-  const result = [];
+  const result = {};
+
   for (const m of items) {
     const lastBatch = await Batch.findOne({ material: m._id }).sort({ date: -1, _id: -1 });
-    result.push({
+    const matData = {
       _id: m._id,
       name: m.name,
       code: m.code,
-      ncm: m.ncm,  // 👈
+      ncm: m.ncm,
       unit: m.unit,
-      lastUnitCost: lastBatch?.unitCost || 0
-    });
+      lastUnitCost: lastBatch?.unitCost || 0,
+      isOfficial: m.isOfficial
+    };
 
+    if (m.isOfficial) {
+      result[m.ncm] = { principal: matData, variacoes: [] };
+    } else {
+      if (!result[m.ncm]) result[m.ncm] = { principal: null, variacoes: [] };
+      result[m.ncm].variacoes.push(matData);
+    }
   }
-  res.json(result);
+
+  res.json(Object.values(result));
 });
+
 
 app.post('/materials', async (req, res) => {
   try {
@@ -333,6 +330,26 @@ app.post('/materials', async (req, res) => {
     res.status(400).json({ ok: false, error: e.message });
   }
 });
+
+app.put('/materials/:id/set-official', async (req, res) => {
+  try {
+    const matId = req.params.id;
+    const mat = await Material.findById(matId);
+    if (!mat) throw new Error('Material não encontrado.');
+
+    // tira o posto de todos do mesmo NCM
+    await Material.updateMany({ ncm: mat.ncm }, { $set: { isOfficial: false } });
+
+    // marca só esse como oficial
+    mat.isOfficial = true;
+    await mat.save();
+
+    res.json({ ok: true, message: `${mat.name} agora é o oficial.` });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 
 // 4) Produtos (BOM) e custo
 app.get('/products', async (_req, res) => {
@@ -359,6 +376,7 @@ app.get('/products/:id/cost', async (req, res) => {
 });
 
 /* ---------- Deletar Material ---------- */
+/* ---------- Deletar Material ---------- */
 app.delete('/materials/:id', async (req, res) => {
   try {
     const matId = req.params.id;
@@ -377,6 +395,7 @@ app.delete('/materials/:id', async (req, res) => {
     res.status(400).json({ ok: false, error: e.message });
   }
 });
+
 
 
 /* ---------- Atualizar Último Custo do Material ---------- */
