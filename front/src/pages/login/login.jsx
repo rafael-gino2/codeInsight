@@ -53,6 +53,7 @@ export default function Login() {
               Soluções inteligentes para otimizar o que move o seu negócio.
               <br/>
               Eficiência, precisão e controle — tudo em um só lugar.
+              
             </p>
           </div>
         </div>
