@@ -7,7 +7,6 @@ import multer from 'multer';
 import xml2js from 'xml2js';
 import xlsx from 'xlsx';
 import fs from 'fs';
-import path from 'path';
 
 const app = express();
 app.use(cors());
@@ -288,32 +287,7 @@ app.post('/upload/invoice-xml', upload.single('file'), async (req, res) => {
 });
 
 // 3) Materiais CRUD
-app.get('/materials', async (_req, res) => {
-  const items = await Material.find().sort({ name: 1 });
-  const result = {};
 
-  for (const m of items) {
-    const lastBatch = await Batch.findOne({ material: m._id }).sort({ date: -1, _id: -1 });
-    const matData = {
-      _id: m._id,
-      name: m.name,
-      code: m.code,
-      ncm: m.ncm,
-      unit: m.unit,
-      lastUnitCost: lastBatch?.unitCost || 0,
-      isOfficial: m.isOfficial
-    };
-
-    if (m.isOfficial) {
-      result[m.ncm] = { principal: matData, variacoes: [] };
-    } else {
-      if (!result[m.ncm]) result[m.ncm] = { principal: null, variacoes: [] };
-      result[m.ncm].variacoes.push(matData);
-    }
-  }
-
-  res.json(Object.values(result));
-});
 
 
 app.post('/materials', async (req, res) => {
@@ -333,22 +307,83 @@ app.post('/materials', async (req, res) => {
 
 app.put('/materials/:id/set-official', async (req, res) => {
   try {
-    const matId = req.params.id;
-    const mat = await Material.findById(matId);
-    if (!mat) throw new Error('Material não encontrado.');
+    const mat = await Material.findById(req.params.id);
+    if (!mat) return res.status(404).json({ error: "Material não encontrado" });
 
-    // tira o posto de todos do mesmo NCM
-    await Material.updateMany({ ncm: mat.ncm }, { $set: { isOfficial: false } });
+    // zera todos do mesmo grupo
+    await Material.updateMany(
+      { ncm: mat.ncm },
+      { $set: { isOfficial: false } }
+    );
 
-    // marca só esse como oficial
+    // define o atual como oficial
     mat.isOfficial = true;
     await mat.save();
 
-    res.json({ ok: true, message: `${mat.name} agora é o oficial.` });
-  } catch (e) {
-    res.status(400).json({ ok: false, error: e.message });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Erro no set-official:", err);
+    res.status(500).json({ error: "Erro ao atualizar oficialidade" });
   }
 });
+
+app.get('/materials', async (req, res) => {
+  try {
+    const all = await Material.aggregate([
+      {
+        $lookup: {
+          from: "batches",
+          localField: "_id",
+          foreignField: "material",
+          as: "batches"
+        }
+      },
+      {
+        $addFields: {
+          lastUnitCost: { $ifNull: [ { $last: "$batches.unitCost" }, 0 ] }
+        }
+      }
+    ]);
+
+    const grouped = {};
+    all.forEach(m => {
+      const key = m.ncm || "SEM_NCM";
+
+      if (!grouped[key]) {
+        grouped[key] = { principal: null, variacoes: [] };
+      }
+
+      if (m.isOfficial) {
+        // só define se ainda não tem principal
+        if (!grouped[key].principal) {
+          grouped[key].principal = m;
+        } else {
+          // se já existe, joga como variação (evita "sumir")
+          grouped[key].variacoes.push(m);
+        }
+      } else {
+        grouped[key].variacoes.push(m);
+      }
+    });
+
+    // fallback: se não houver oficial, promove o primeiro da lista
+    const result = Object.values(grouped).map(g => {
+      if (!g.principal && g.variacoes.length > 0) {
+        g.principal = g.variacoes[0];
+        g.variacoes = g.variacoes.slice(1);
+      }
+      return g;
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("Erro no /materials:", err);
+    res.status(500).json({ error: "Erro ao carregar materiais" });
+  }
+});
+
+
+
 
 
 // 4) Produtos (BOM) e custo

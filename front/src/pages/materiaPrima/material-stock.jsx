@@ -250,6 +250,13 @@ export default function MateriasPrimas() {
             adicionado: new Date().toLocaleDateString("pt-BR")
           });
 
+          // 🔑 sempre popula variacoesTemp, mesmo que vazio
+          variacoesTemp[principal.name] = (grupo.variacoes || []).map(v => ({
+            _id: v._id,
+            nome: v.name,
+            preco: `R$ ${v.lastUnitCost.toFixed(2)}`
+          }));
+
           if (grupo.variacoes && grupo.variacoes.length > 0) {
             variacoesTemp[principal.name] = grupo.variacoes.map(v => ({
               _id: v._id,
