@@ -347,31 +347,56 @@ export default function Produtos() {
                         onChange={handleNovoProdutoChange}
                       />
                     </div>
-
                   </div>
 
                   <h3>Adicionar matérias-primas utilizadas</h3>
                   <div className="stock-modal-add-product">
                     {materiais.map((m) => {
-                      const material = m.principal || m.variacoes[0];
+                      const material = m.principal || m.variacoes?.[0];
                       if (!material) return null;
 
+                      // Procurar se já tem seleção
+                      const selecionado = materiasSelecionadas.find(p => p.materialId === material._id);
+                      const qty = selecionado?.qty || 0;
+
+                      // Encontrar batch do material
+                      const batchDoMaterial = material.batches?.find(
+                        b => b.material.toString() === material._id.toString()
+                      ) || null;
+
+
+                      // Debug logs
+                      console.log("Material:", material.name);
+                      console.log("Batch do material:", batchDoMaterial);
+                      console.log("Quantidade digitada:", qty);
+
+                      const precoUnitario = batchDoMaterial ? parseFloat(batchDoMaterial.unitCost) : 0;
+                      const total = qty * precoUnitario;
+
+                      console.log("Preço unitário:", precoUnitario);
+                      console.log("Total calculado:", total);
+
                       return (
-                        <div key={material._id} className="material-quantity-row">
-                          <label>{material.name}</label>
+                        <div key={material._id} style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem" }}>
+                          <label style={{ width: "150px" }}>{material.name}</label>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
                             placeholder="0.00"
+                            style={{ width: "80px", marginRight: "10px" }}
+                            value={qty}
                             onChange={(e) => {
-                              const qty = Number(e.target.value);
+                              const newQty = Number(e.target.value);
                               setMateriasSelecionadas(prev => {
-                                const semAtual = prev.filter(p => p.materialId !== material._id);
-                                return qty > 0 ? [...semAtual, { materialId: material._id, qty }] : semAtual;
+                                const other = prev.filter(p => p.materialId !== material._id);
+                                return [...other, { materialId: material._id, qty: newQty }];
                               });
                             }}
                           />
+                          <span style={{ fontWeight: "bold" }}>
+                            {total.toFixed(2).replace(".", ",")} R$
+                          </span>
                         </div>
                       );
                     })}
@@ -398,11 +423,11 @@ export default function Produtos() {
                     >
                       Salvar
                     </button>
-
                   </div>
                 </div>
               </div>
             )}
+
           </div>
         </div>
 
