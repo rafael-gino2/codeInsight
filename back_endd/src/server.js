@@ -134,32 +134,36 @@ const lifoConsume = async (materialId, requiredQty) => {
   return cost;
 };
 
-const computeProductCost = async (productId) => {
-  const p = await Product.findById(productId).populate('bom.material');
-  if (!p) throw new Error('Produto não encontrado.');
+async function computeProductCost(productId) {
+  const product = await Product.findById(productId).populate("bom.material");
+  if (!product) throw new Error("Produto não encontrado");
 
-  let total = 0;
+  let custoTotal = 0;
 
-  // filtra apenas materiais existentes
-  const validBOM = p.bom.filter(item => item.material != null);
+  for (const item of product.bom) {
+    const material = item.material;
+    console.log("Processando material:", material?.name, "quantidade:", item.qty); // 👈
 
-  for (const item of validBOM) {
-    const mat = item.material;
-    const bomQty = item.qty;
+    if (!material) continue;
 
-    const lastBatch = await Batch.findOne({ material: mat._id }).sort({ date: -1, _id: -1 });
-    const unitCost = lastBatch?.unitCost || 0;
+    const batch = await Batch.findOne({ material: material._id }).sort({ date: -1 });
+    if (!batch) {
+      console.log("Nenhum lote encontrado para material:", material.name); // 👈
+      continue;
+    }
 
-    total += bomQty * unitCost;
+    const custo = batch.unitCost * item.qty;
+    console.log(`Custo do material ${material.name}: ${custo}`); // 👈
+    custoTotal += custo;
   }
 
-  p.lastComputedCost = total;
-  p.lastComputedAt = new Date();
-  await p.save();
-  return total;
-};
+  product.lastComputedCost = custoTotal;
+  product.lastComputedAt = new Date();
+  await product.save();
+  console.log("Custo total do produto salvo:", custoTotal); // 👈
 
-
+  return custoTotal;
+}
 
 // Recalcula produtos impactados por materiais
 const recomputeImpactedProducts = async (materialIds) => {
@@ -287,9 +291,6 @@ app.post('/upload/invoice-xml', upload.single('file'), async (req, res) => {
 });
 
 // 3) Materiais CRUD
-
-
-
 app.post('/materials', async (req, res) => {
   try {
     const { code, name, unit, cost, qty } = req.body;
@@ -327,6 +328,41 @@ app.put('/materials/:id/set-official', async (req, res) => {
   }
 });
 
+// rota para cadastrar manualmente uma matéria-prima
+app.post('/materials/manual', async (req, res) => {
+  try {
+    const { name, ncm, unit, unitCost, tipo } = req.body;
+
+    if (!name || !ncm || !unit || !unitCost) {
+      return res.status(400).json({ error: 'Campos obrigatórios: name, ncm, unit, unitCost' });
+    }
+
+    // cria material
+    const material = await Material.create({
+      name,
+      ncm,
+      unit,
+      isOfficial: true
+    });
+
+    // cria lote inicial com a data de hoje
+    await Batch.create({
+      material: material._id,
+      qty: 0, // 👈 pode começar sem estoque
+      unitCost,
+      remainingQty: 0,
+      date: new Date(),
+      invoiceRef: "manual"
+    });
+
+    res.status(201).json(material);
+  } catch (err) {
+    console.error("Erro ao cadastrar manualmente:", err);
+    res.status(500).json({ error: 'Erro ao cadastrar matéria-prima manualmente' });
+  }
+});
+
+
 app.get('/materials', async (req, res) => {
   try {
     const all = await Material.aggregate([
@@ -340,7 +376,7 @@ app.get('/materials', async (req, res) => {
       },
       {
         $addFields: {
-          lastUnitCost: { $ifNull: [ { $last: "$batches.unitCost" }, 0 ] }
+          lastUnitCost: { $ifNull: [{ $last: "$batches.unitCost" }, 0] }
         }
       }
     ]);
@@ -383,23 +419,61 @@ app.get('/materials', async (req, res) => {
 });
 
 
-
-
-
 // 4) Produtos (BOM) e custo
 app.get('/products', async (_req, res) => {
   const items = await Product.find().populate('bom.material');
-  res.json(items);
+
+  const formatted = items.map(prod => {
+    const preco = prod.lastComputedCost?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) || "R$ 0,00";
+    const now = new Date().toLocaleDateString("pt-BR");
+
+    return {
+      _id: prod._id,
+      nome: prod.name,
+      preco,
+      unidade: "un",
+      tipo: "Produto",
+      status: "Em estoque",
+      adicionado: prod.createdAt ? new Date(prod.createdAt).toLocaleDateString("pt-BR") : now,
+      ultimaEdicao: prod.updatedAt ? new Date(prod.updatedAt).toLocaleDateString("pt-BR") : now,
+      bom: prod.bom
+    };
+  });
+
+  res.json(formatted);
 });
 
-app.post('/products', async (req, res) => {
-  const { name, bom } = req.body;
-  const bomNorm = (bom || []).map(i => ({ material: i.materialId, qty: Number(i.qty) }));
-  const p = await Product.create({ name, bom: bomNorm });
-  try { await computeProductCost(p._id); } catch { }
-  const populated = await Product.findById(p._id).populate('bom.material');
-  res.json(populated);
+
+app.post("/products", async (req, res) => {
+  try {
+    const { name, bom } = req.body;
+    console.log("Dados recebidos para novo produto:", req.body); // 👈
+
+    const prod = await Product.create({ name, bom });
+    console.log("Produto criado no MongoDB:", prod); // 👈
+
+    const custo = await computeProductCost(prod._id);
+    console.log("Custo calculado:", custo); // 👈
+
+    res.json({
+      _id: prod._id,
+      nome: prod.name,
+      preco: custo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+      unidade: "un",
+      tipo: "Produto",
+      status: "Em estoque",
+      adicionado: new Date().toLocaleDateString("pt-BR"),
+      ultimaEdicao: new Date().toLocaleDateString("pt-BR"),
+      bom
+    });
+  } catch (err) {
+    console.error("Erro ao criar produto:", err);
+    res.status(400).json({ error: err.message });
+  }
 });
+
+
+
 
 app.get('/products/:id/cost', async (req, res) => {
   try {

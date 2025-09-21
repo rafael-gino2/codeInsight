@@ -9,7 +9,6 @@ import axios from "axios";
 
 const API_URL = "http://localhost:3000"; // ajuste se seu back usar outra porta
 
-
 export default function MateriasPrimas() {
   // ---------------- ESTADOS ----------------
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,6 +57,16 @@ export default function MateriasPrimas() {
   const indiceFinal = indiceInicial + itensPorPagina;
   const materiaisPagina = materiaisFiltrados.slice(indiceInicial, indiceFinal);
   const totalPaginas = Math.ceil(materiaisFiltrados.length / itensPorPagina);
+
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+const [novoMaterial, setNovoMaterial] = useState({
+  nome: "",
+  ncm: "",
+  preco: "",
+  unidade: "",
+  tipo: ""
+});
+
 
   // ----- Funções de modal de filtro -----
   const openFilterModal = () => setIsFilterModalOpen(true);
@@ -401,6 +410,15 @@ export default function MateriasPrimas() {
               <p>Adicionar nota fiscal</p>
             </button>
 
+            <button
+  className="stock-add-button"
+  onClick={() => setIsManualModalOpen(true)}
+>
+  <Icon icon="mdi:plus-box" height="30" />
+  <p>Adicionar manualmente</p>
+</button>
+
+
             {/* Modal de upload de nota fiscal */}
             {isAddModalOpen && (
               <div className="stock-modal-overlay">
@@ -463,6 +481,84 @@ export default function MateriasPrimas() {
             )}
           </div>
         </div>
+
+        {isManualModalOpen && (
+  <div className="stock-modal-overlay" onClick={() => setIsManualModalOpen(false)}>
+    <div className="stock-modal-content" onClick={(e) => e.stopPropagation()}>
+      <h2>Cadastrar Matéria-prima Manualmente</h2>
+      <form>
+        <div className="stock-modal-field">
+          <label>Nome</label>
+          <input
+            type="text"
+            value={novoMaterial.nome}
+            onChange={(e) => setNovoMaterial({ ...novoMaterial, nome: e.target.value })}
+          />
+        </div>
+        <div className="stock-modal-field">
+          <label>NCM</label>
+          <input
+            type="text"
+            value={novoMaterial.ncm}
+            onChange={(e) => setNovoMaterial({ ...novoMaterial, ncm: e.target.value })}
+          />
+        </div>
+        <div className="stock-modal-field">
+          <label>Preço unitário (R$)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={novoMaterial.preco}
+            onChange={(e) => setNovoMaterial({ ...novoMaterial, preco: e.target.value })}
+          />
+        </div>
+        <div className="stock-modal-field">
+          <label>Unidade</label>
+          <input
+            type="text"
+            value={novoMaterial.unidade}
+            onChange={(e) => setNovoMaterial({ ...novoMaterial, unidade: e.target.value })}
+          />
+        </div>
+        <div className="stock-modal-field">
+          <label>Tipo</label>
+          <input
+            type="text"
+            value={novoMaterial.tipo}
+            onChange={(e) => setNovoMaterial({ ...novoMaterial, tipo: e.target.value })}
+          />
+        </div>
+
+        <div className="stock-modal-actions">
+          <button type="button" className="stock-modal-cancel" onClick={() => setIsManualModalOpen(false)}>Cancelar</button>
+          <button
+            type="button"
+            className="stock-modal-save"
+            onClick={async () => {
+              try {
+                await axios.post(`${API_URL}/materials/manual`, {
+                  name: novoMaterial.nome,
+                  ncm: novoMaterial.ncm,
+                  unit: novoMaterial.unidade,
+                  unitCost: parseFloat(novoMaterial.preco),
+                  tipo: novoMaterial.tipo
+                });
+                await carregarMateriais(); // recarrega lista
+                setIsManualModalOpen(false);
+              } catch (err) {
+                console.error("Erro ao cadastrar manual:", err);
+                alert("Erro ao cadastrar manualmente");
+              }
+            }}
+          >
+            Salvar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
 
         {/* Tabela */}
         <div className="section-stock-table">

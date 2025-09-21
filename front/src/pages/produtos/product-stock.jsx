@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import headerLogo from "../../assets/logo-header.svg";
 import Navbar from "../../components/navbar";
 import { Icon } from "@iconify/react";
@@ -7,19 +7,6 @@ import "../../index.css";
 
 export default function Produtos() {
 
-
-  // ----- Produtos iniciais -----
-  const produtosIniciais = [
-    { nome: "Produto 1", ncm: "8471.30.12", preco: "R$ 50,00", unidade: "Litros", tipo: "Bobina", status: "Fora de estoque", variacao: "Ver variações", adicionado: "04/09/2025" },
-    { nome: "Produto 2", ncm: "1234.56.78", preco: "R$ 100,00", unidade: "Caixa", tipo: "Papel", status: "Em estoque", variacao: "Ver variações", adicionado: "05/09/2025" },
-    { nome: "Produto 3", ncm: "5678.90.12", preco: "R$ 75,00", unidade: "Unidade", tipo: "Plástico", status: "Pendente", variacao: "Ver variações", adicionado: "06/09/2025" },
-    { nome: "Produto 4", ncm: "9101.11.13", preco: "R$ 250,00", unidade: "Kg", tipo: "Metal", status: "Fora de estoque", variacao: "Ver variações", adicionado: "07/09/2025" },
-    { nome: "Produto 5", ncm: "1415.16.17", preco: "R$ 15,00", unidade: "Pacote", tipo: "Papelão", status: "Em estoque", variacao: "Ver variações", adicionado: "08/09/2025" },
-    { nome: "Produto 6", ncm: "1819.20.21", preco: "R$ 320,00", unidade: "Litros", tipo: "Químico", status: "Fora de estoque", variacao: "Ver variações", adicionado: "09/09/2025" },
-    { nome: "Produto 7", ncm: "2223.24.25", preco: "R$ 8,50", unidade: "Unidade", tipo: "Vidro", status: "Em estoque", variacao: "Ver variações", adicionado: "10/09/2025" },
-    { nome: "Produto 8", ncm: "2627.28.29", preco: "R$ 180,00", unidade: "Kg", tipo: "Aço Inoxidável", status: "Em estoque", variacao: "Ver variações", adicionado: "11/09/2025" },
-    { nome: "Produto 9", ncm: "3031.32.33", preco: "R$ 90,00", unidade: "Caixa", tipo: "Madeira", status: "Pendente", variacao: "Ver variações", adicionado: "12/09/2025" }
-  ];
 
   // ----- Estados principais -----
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,11 +19,8 @@ export default function Produtos() {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [materiasSelecionadas, setMateriasSelecionadas] = useState([]);
   const [novoProduto, setNovoProduto] = useState({ nomeProduto: "", unidadeMedida: "" });
-  const [produtos, setProdutos] = useState(produtosIniciais);
-
-  const itensPorPagina = 8;
-
-
+  const [produtos, setProdutos] = useState([]);
+  const [materiais, setMateriais] = useState([]);
 
   // ----- Funções de modal -----
   const openModal = (produto) => {
@@ -104,15 +88,6 @@ export default function Produtos() {
     setPaginaAtual(1); // volta pra primeira página ao filtrar
   };
 
-  // ----- Matérias-primas -----
-  const materiasPrimas = ["Aço", "Alumínio", "Cobre", "Vidro", "Plástico", "Papel", "Químico", "Madeira", "Borracha", "Tecido"];
-  const toggleMateria = (materia) => {
-    setMateriasSelecionadas(prev => prev.includes(materia)
-      ? prev.filter(m => m !== materia)
-      : [...prev, materia]
-    );
-  };
-
   // ----- Novo produto -----
   const handleNovoProdutoChange = (e) => {
     const { name, value } = e.target;
@@ -121,25 +96,8 @@ export default function Produtos() {
 
   const isSalvarHabilitado = () => {
     return novoProduto.nomeProduto.trim() !== "" &&
-           novoProduto.unidadeMedida !== "" &&
-           materiasSelecionadas.length > 0;
+      materiasSelecionadas.length > 0;
   };
-
-  // ----- Produtos filtrados -----
-  const produtosFiltrados = produtos
-    .filter(p =>
-      Object.values(p).some(v => String(v).toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-    .filter(p =>
-      (filtros.status === "" || p.status === filtros.status) &&
-      (filtros.tipo === "" || p.tipo === filtros.tipo)
-    );
-
-  // ----- Paginação -----
-  const indexInicio = (paginaAtual - 1) * itensPorPagina;
-  const indexFim = indexInicio + itensPorPagina;
-  const produtosPagina = produtosFiltrados.slice(indexInicio, indexFim);
-  const totalPaginas = Math.ceil(produtosFiltrados.length / itensPorPagina);
 
   // ----- Funções de modal de filtro -----
   const openFilterModal = () => setIsFilterModalOpen(true);
@@ -190,6 +148,59 @@ export default function Produtos() {
   const openExportModal = () => {
     setIsExportModalOpen(true);
   };
+
+  // Buscar produtos e materiais
+  useEffect(() => {
+    fetch("http://localhost:3000/products")
+      .then(res => res.json())
+      .then(setProdutos)
+      .catch(console.error);
+
+    fetch("http://localhost:3000/materials")
+      .then(res => res.json())
+      .then(setMateriais)
+      .catch(console.error);
+  }, []);
+
+  const salvarProduto = async () => {
+    try {
+      const payload = {
+        name: novoProduto.nomeProduto,
+        bom: materiasSelecionadas.map(m => ({ material: m.materialId, qty: m.qty }))
+      };
+
+      console.log("Payload enviado:", payload);
+
+      const res = await fetch("http://localhost:3000/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const novo = await res.json();
+      console.log("Resposta do backend:", novo);
+
+      setProdutos(prev => [...prev, novo]);
+      setIsAddModalOpen(false);
+    } catch (err) {
+      console.error("Erro no salvarProduto:", err);
+    }
+  };
+
+
+  // ----- Paginação -----
+  const itensPorPagina = 5;
+  const produtosFiltrados = produtos.filter((p) =>
+    p.nome?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    (filtros.status === "" || p.status === filtros.status) &&
+    (filtros.tipo === "" || p.tipo === filtros.tipo)
+  );
+
+  const totalPaginas = Math.ceil(produtosFiltrados.length / itensPorPagina);
+  const produtosPagina = produtosFiltrados.slice(
+    (paginaAtual - 1) * itensPorPagina,
+    paginaAtual * itensPorPagina
+  );
 
   return (
     <div>
@@ -277,6 +288,8 @@ export default function Produtos() {
                       <button type="button" className="stock-modal-save" onClick={closeFilterModal}>
                         Aplicar
                       </button>
+
+
                     </div>
                   </form>
                 </div>
@@ -335,46 +348,33 @@ export default function Produtos() {
                       />
                     </div>
 
-                    <div className="stock-modal-field">
-                      <label>Unidade de Medida</label>
-                      <select
-                        name="unidadeMedida"
-                        value={novoProduto.unidadeMedida}
-                        onChange={handleNovoProdutoChange}
-                      >
-                        <option value="" disabled>Selecione a unidade de medida</option>
-                        <option value="kg">Quilograma (kg)</option>
-                        <option value="g">Grama (g)</option>
-                        <option value="l">Litro (L)</option>
-                        <option value="ml">Mililitro (mL)</option>
-                        <option value="un">Unidade (un)</option>
-                      </select>
-                    </div>
                   </div>
 
                   <h3>Adicionar matérias-primas utilizadas</h3>
                   <div className="stock-modal-add-product">
-                    <div className="material-selector">
-                      {materiasSelecionadas.length > 0 ? (
-                        materiasSelecionadas.map((m, i) => (
-                          <span key={i} className="stock-material-selected">{m}</span>
-                        ))
-                      ) : (
-                        <p>Nenhuma matéria-prima selecionada</p>
-                      )}
-                    </div>
+                    {materiais.map((m) => {
+                      const material = m.principal || m.variacoes[0];
+                      if (!material) return null;
 
-                    <div className="stock-material-list">
-                      {materiasPrimas.map((materia, index) => (
-                        <div
-                          key={index}
-                          className={`stock-material-item ${materiasSelecionadas.includes(materia) ? "selected" : ""}`}
-                          onClick={() => toggleMateria(materia)}
-                        >
-                          {materia}
+                      return (
+                        <div key={material._id} className="material-quantity-row">
+                          <label>{material.name}</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            onChange={(e) => {
+                              const qty = Number(e.target.value);
+                              setMateriasSelecionadas(prev => {
+                                const semAtual = prev.filter(p => p.materialId !== material._id);
+                                return qty > 0 ? [...semAtual, { materialId: material._id, qty }] : semAtual;
+                              });
+                            }}
+                          />
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
 
                   <div className="stock-modal-actions">
@@ -391,9 +391,14 @@ export default function Produtos() {
                         opacity: isSalvarHabilitado() ? 1 : 0.5,
                         cursor: isSalvarHabilitado() ? "pointer" : "not-allowed"
                       }}
+                      onClick={() => {
+                        console.log("Salvando produto:", novoProduto, materiasSelecionadas);
+                        salvarProduto().catch(err => console.error("Erro ao salvar:", err));
+                      }}
                     >
                       Salvar
                     </button>
+
                   </div>
                 </div>
               </div>
