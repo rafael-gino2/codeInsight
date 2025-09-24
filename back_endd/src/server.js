@@ -7,6 +7,11 @@ import multer from 'multer';
 import xml2js from 'xml2js';
 import xlsx from 'xlsx';
 import fs from 'fs';
+import path from 'path';
+import PDFParser from "pdf2json";
+import { execFile } from "child_process";
+import { fileURLToPath } from "url";
+
 
 const app = express();
 app.use(cors());
@@ -29,8 +34,11 @@ const MaterialSchema = new mongoose.Schema({
   code: { type: String, index: true },
   name: { type: String, required: true },
   unit: { type: String, default: 'un' },
-  isOfficial: { type: Boolean, default: false }  // 👈 novo campo
+  isOfficial: { type: Boolean, default: false },
+  tipo: { type: String },      // 👈 adicionado
+  possuiNF: { type: Boolean }, // 👈 adicionado
 }, { timestamps: true });
+
 
 
 
@@ -290,6 +298,91 @@ app.post('/upload/invoice-xml', upload.single('file'), async (req, res) => {
   }
 });
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// caminho absoluto do parser_pdf.py
+const scriptPath = path.join(__dirname, "parser_pdf.py");
+
+// 2) Upload PDF NF-e (DANFE)
+app.post("/upload/invoice-pdf", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) throw new Error("Nenhum arquivo enviado");
+
+    const filePath = req.file.path;
+
+    // Chama o script Python com caminho absoluto
+    execFile("python", [scriptPath, filePath], async (err, stdout, stderr) => {
+      if (err) {
+        console.error("Erro no parser_pdf.py:", err, stderr);
+        return res.status(400).json({ ok: false, error: "Erro ao processar PDF" });
+      }
+
+      let products;
+      try {
+        products = JSON.parse(stdout);
+      } catch (parseErr) {
+        console.error("Erro ao converter saída do Python:", parseErr, stdout);
+        return res.status(400).json({ ok: false, error: "Erro na saída do parser" });
+      }
+
+      // cria invoice igual ao XML
+      const invoice = await Invoice.create({
+        number: "SEM_NUMERO",
+        supplierCNPJ: "",
+        issueDate: new Date(),
+        lines: products,
+        rawText: ""
+      });
+
+      // cadastra materiais/lotes
+      const touched = new Set();
+      for (const it of products) {
+        if (!it.materialName || !it.unitCost) continue;
+
+        let mat =
+          (await Material.findOne({ code: it.materialCode })) ||
+          (await Material.findOne({ name: it.materialName }));
+
+        if (!mat) {
+          mat = await Material.create({
+            code: it.materialCode,
+            name: it.materialName,
+            unit: it.unit || "un"
+          });
+        }
+
+        await Batch.create({
+          material: mat._id,
+          qty: it.qty,
+          unitCost: it.unitCost,
+          remainingQty: it.qty,
+          date: new Date(),
+          invoiceRef: invoice.number
+        });
+
+        touched.add(String(mat._id));
+      }
+
+      await recomputeImpactedProducts([...touched]);
+
+      fs.unlinkSync(filePath);
+
+      return res.json({
+        ok: true,
+        invoiceId: invoice._id,
+        itemsDetected: products.length,
+        preview: products.slice(0, 20)
+      });
+    });
+  } catch (e) {
+    console.error("Erro geral /upload/invoice-pdf:", e);
+    return res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+
+
 // 3) Materiais CRUD
 app.post('/materials', async (req, res) => {
   try {
@@ -327,6 +420,38 @@ app.put('/materials/:id/set-official', async (req, res) => {
     res.status(500).json({ error: "Erro ao atualizar oficialidade" });
   }
 });
+
+app.put("/materials/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, ncm, unit, tipo, possuiNF, isOfficial, code } = req.body;
+
+    const updateFields = {};
+    if (name !== undefined) updateFields.name = name;
+    if (ncm !== undefined) updateFields.ncm = ncm;
+    if (unit !== undefined) updateFields.unit = unit;
+    if (tipo !== undefined) updateFields.tipo = tipo;
+    if (possuiNF !== undefined) updateFields.possuiNF = possuiNF;
+    if (isOfficial !== undefined) updateFields.isOfficial = isOfficial;
+    if (code !== undefined) updateFields.code = code;
+
+    const material = await Material.findByIdAndUpdate(
+      id,
+      { $set: updateFields },
+      { new: true }
+    );
+
+    if (!material) {
+      return res.status(404).json({ error: "Material não encontrado" });
+    }
+
+    res.json(material);
+  } catch (err) {
+    console.error("Erro ao atualizar material:", err);
+    res.status(500).json({ error: "Erro ao atualizar material" });
+  }
+});
+
 
 // rota para cadastrar manualmente uma matéria-prima
 app.post('/materials/manual', async (req, res) => {

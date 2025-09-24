@@ -20,12 +20,7 @@ export default function MateriasPrimas() {
   const itensPorPagina = 8;
   const [filtros, setFiltros] = useState({ status: "", tipo: "" });
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [isVariacaoModalOpen, setIsVariacaoModalOpen] = useState(false);
-  const [variacoesSelecionadas, setVariacoesSelecionadas] = useState([]);
-  const [isEditVariacaoModalOpen, setIsEditVariacaoModalOpen] = useState(false);
   const [arquivosCarregados, setArquivosCarregados] = useState([]);
-  const [variacoesPorMateria, setVariacoesPorMateria] = useState({});
-
 
   // ---------------- LISTA INICIAL ----------------
   const [materiais, setMateriais] = useState([]);
@@ -42,7 +37,6 @@ export default function MateriasPrimas() {
       materia.preco.toLowerCase().includes(searchTerm.toLowerCase()) ||
       materia.unidade.toLowerCase().includes(searchTerm.toLowerCase()) ||
       materia.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      materia.variacao.toLowerCase().includes(searchTerm.toLowerCase()) ||
       materia.possuiNF.toLowerCase().includes(searchTerm.toLowerCase()) ||
       materia.adicionado.toLowerCase().includes(searchTerm.toLowerCase())
     )
@@ -59,13 +53,13 @@ export default function MateriasPrimas() {
   const totalPaginas = Math.ceil(materiaisFiltrados.length / itensPorPagina);
 
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
-const [novoMaterial, setNovoMaterial] = useState({
-  nome: "",
-  ncm: "",
-  preco: "",
-  unidade: "",
-  tipo: ""
-});
+  const [novoMaterial, setNovoMaterial] = useState({
+    nome: "",
+    ncm: "",
+    preco: "",
+    unidade: "",
+    tipo: ""
+  });
 
 
   // ----- Funções de modal de filtro -----
@@ -87,27 +81,6 @@ const [novoMaterial, setNovoMaterial] = useState({
   const closeModal = () => {
     setSelectedMaterial(null);
     setIsModalOpen(false);
-  };
-
-  const abrirModalVariacao = (materiaNome) => {
-    const principal = materiais.find(m => m.nome === materiaNome);
-    setSelectedMaterial(principal); // 👈 agora o modal sabe quem é o principal
-    setVariacoesSelecionadas(variacoesPorMateria[materiaNome] || []);
-    setIsVariacaoModalOpen(true);
-  };
-
-
-  const fecharModalVariacao = () => {
-    setIsVariacaoModalOpen(false);
-    setVariacoesSelecionadas([]);
-  };
-
-  const abrirModalEditarVariacao = () => {
-    setIsEditVariacaoModalOpen(true);
-  };
-
-  const fecharModalEditarVariacao = () => {
-    setIsEditVariacaoModalOpen(false);
   };
 
   // ---------------- FUNÇÕES AUXILIARES ----------------
@@ -147,6 +120,38 @@ const [novoMaterial, setNovoMaterial] = useState({
   };
 
 
+  const handlePdfChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const novoArquivo = { nome: file.name, progresso: 0 };
+    setArquivosCarregados(prev => [...prev, novoArquivo]);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      await axios.post(`${API_URL}/upload/invoice-pdf`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setArquivosCarregados(prev =>
+            prev.map(f => f.nome === file.name ? { ...f, progresso: percent } : f)
+          );
+        }
+      });
+
+      // recarregar lista de materiais
+      await carregarMateriais();
+
+    } catch (err) {
+      console.error("Erro no upload PDF:", err);
+      alert("Erro ao enviar PDF.");
+    }
+  };
+
+
+
   // ---------------- ORDENAR ----------------
   const ordenar = (key) => {
     let direction = "asc";
@@ -179,7 +184,6 @@ const [novoMaterial, setNovoMaterial] = useState({
     { chave: "preco", titulo: "Preço" },
     { chave: "unidade", titulo: "Unidade de medida" },
     { chave: "tipo", titulo: "Tipo" },
-    { chave: "variacao", titulo: "Variação" },
     { chave: "possuiNF", titulo: "Possui NF?" },
     { chave: "adicionado", titulo: "Adicionado" }
   ];
@@ -220,7 +224,7 @@ const [novoMaterial, setNovoMaterial] = useState({
     let y = 30;
     materiaisFiltrados.forEach((m, index) => {
       doc.text(
-        `${index + 1}. ${m.nome} - ${m.ncm} - ${m.preco} - ${m.unidade} - ${m.tipo} - ${m.variacao} - ${m.possuiNF} - ${m.adicionado}`,
+        `${index + 1}. ${m.nome} - ${m.ncm} - ${m.preco} - ${m.unidade} - ${m.tipo} - ${m.possuiNF} - ${m.adicionado}`,
         14,
         y
       );
@@ -240,49 +244,48 @@ const [novoMaterial, setNovoMaterial] = useState({
       const res = await axios.get(`${API_URL}/materials`);
       const lista = res.data; // já vem agrupado: [{ principal, variacoes }]
 
-      const principais = [];
-      const variacoesTemp = {};
+      const todosMateriais = [];
 
       lista.forEach(grupo => {
         if (grupo.principal) {
           const principal = grupo.principal;
 
-          principais.push({
+          // adiciona o principal
+          todosMateriais.push({
             _id: principal._id,
             nome: principal.name,
             ncm: principal.ncm,
             preco: `R$ ${principal.lastUnitCost.toFixed(2)}`,
             unidade: principal.unit,
             tipo: "Padrão",
-            variacao: "Ver variações",
             possuiNF: "Sim",
             adicionado: new Date().toLocaleDateString("pt-BR")
           });
 
-          // 🔑 sempre popula variacoesTemp, mesmo que vazio
-          variacoesTemp[principal.name] = (grupo.variacoes || []).map(v => ({
-            _id: v._id,
-            nome: v.name,
-            preco: `R$ ${v.lastUnitCost.toFixed(2)}`
-          }));
-
+          // adiciona cada variação já logo abaixo
           if (grupo.variacoes && grupo.variacoes.length > 0) {
-            variacoesTemp[principal.name] = grupo.variacoes.map(v => ({
-              _id: v._id,
-              nome: v.name,
-              preco: `R$ ${v.lastUnitCost.toFixed(2)}`
-            }));
+            grupo.variacoes.forEach(v => {
+              todosMateriais.push({
+                _id: v._id,
+                nome: v.name,
+                ncm: v.ncm || "-", // se não tiver NCM na variação
+                preco: `R$ ${v.lastUnitCost.toFixed(2)}`,
+                unidade: v.unit || principal.unit, // usa a mesma unidade se não tiver
+                tipo: "Variação",
+                possuiNF: "Sim",
+                adicionado: new Date().toLocaleDateString("pt-BR")
+              });
+            });
           }
         }
       });
 
-      setMateriais(principais);
-      setVariacoesPorMateria(variacoesTemp);
-
+      setMateriais(todosMateriais);
     } catch (err) {
       console.error("Erro ao carregar materiais:", err);
     }
   };
+
 
   return (
     <div>
@@ -411,12 +414,12 @@ const [novoMaterial, setNovoMaterial] = useState({
             </button>
 
             <button
-  className="stock-add-button"
-  onClick={() => setIsManualModalOpen(true)}
->
-  <Icon icon="mdi:plus-box" height="30" />
-  <p>Adicionar manualmente</p>
-</button>
+              className="stock-add-button"
+              onClick={() => setIsManualModalOpen(true)}
+            >
+              <Icon icon="mdi:plus-box" height="30" />
+              <p>Adicionar manualmente</p>
+            </button>
 
 
             {/* Modal de upload de nota fiscal */}
@@ -426,22 +429,40 @@ const [novoMaterial, setNovoMaterial] = useState({
                   <h2>Carregar Nota Fiscal</h2>
 
                   <div className="stock-modal-field">
+                    {/* Upload XML */}
                     <input
-                      id="fileInput"
+                      id="fileInputXml"
                       type="file"
                       accept=".xml"
                       style={{ display: "none" }}
                       onChange={handleFileChange}
                     />
-
                     <button
                       type="button"
-                      onClick={() => document.getElementById("fileInput").click()}
+                      onClick={() => document.getElementById("fileInputXml").click()}
                       className="stock-modal-load"
                     >
                       <img src={loadIcon} alt="Load Icon" />
                       <p><span>Clique para carregar</span> ou arraste e solte</p>
                       <p>seu arquivo <span>XML</span></p>
+                    </button>
+
+                    {/* Upload PDF */}
+                    <input
+                      id="fileInputPdf"
+                      type="file"
+                      accept=".pdf"
+                      style={{ display: "none" }}
+                      onChange={handlePdfChange}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById("fileInputPdf").click()}
+                      className="stock-modal-load"
+                    >
+                      <img src={loadIcon} alt="Load Icon" />
+                      <p><span>Clique para carregar</span> ou arraste e solte</p>
+                      <p>seu arquivo <span>PDF</span></p>
                     </button>
 
                     {/* Lista de arquivos carregados */}
@@ -483,81 +504,81 @@ const [novoMaterial, setNovoMaterial] = useState({
         </div>
 
         {isManualModalOpen && (
-  <div className="stock-modal-overlay" onClick={() => setIsManualModalOpen(false)}>
-    <div className="stock-modal-content" onClick={(e) => e.stopPropagation()}>
-      <h2>Cadastrar Matéria-prima Manualmente</h2>
-      <form>
-        <div className="stock-modal-field">
-          <label>Nome</label>
-          <input
-            type="text"
-            value={novoMaterial.nome}
-            onChange={(e) => setNovoMaterial({ ...novoMaterial, nome: e.target.value })}
-          />
-        </div>
-        <div className="stock-modal-field">
-          <label>NCM</label>
-          <input
-            type="text"
-            value={novoMaterial.ncm}
-            onChange={(e) => setNovoMaterial({ ...novoMaterial, ncm: e.target.value })}
-          />
-        </div>
-        <div className="stock-modal-field">
-          <label>Preço unitário (R$)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={novoMaterial.preco}
-            onChange={(e) => setNovoMaterial({ ...novoMaterial, preco: e.target.value })}
-          />
-        </div>
-        <div className="stock-modal-field">
-          <label>Unidade</label>
-          <input
-            type="text"
-            value={novoMaterial.unidade}
-            onChange={(e) => setNovoMaterial({ ...novoMaterial, unidade: e.target.value })}
-          />
-        </div>
-        <div className="stock-modal-field">
-          <label>Tipo</label>
-          <input
-            type="text"
-            value={novoMaterial.tipo}
-            onChange={(e) => setNovoMaterial({ ...novoMaterial, tipo: e.target.value })}
-          />
-        </div>
+          <div className="stock-modal-overlay" onClick={() => setIsManualModalOpen(false)}>
+            <div className="stock-modal-content" onClick={(e) => e.stopPropagation()}>
+              <h2>Cadastrar Matéria-prima Manualmente</h2>
+              <form>
+                <div className="stock-modal-field">
+                  <label>Nome</label>
+                  <input
+                    type="text"
+                    value={novoMaterial.nome}
+                    onChange={(e) => setNovoMaterial({ ...novoMaterial, nome: e.target.value })}
+                  />
+                </div>
+                <div className="stock-modal-field">
+                  <label>NCM</label>
+                  <input
+                    type="text"
+                    value={novoMaterial.ncm}
+                    onChange={(e) => setNovoMaterial({ ...novoMaterial, ncm: e.target.value })}
+                  />
+                </div>
+                <div className="stock-modal-field">
+                  <label>Preço unitário (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={novoMaterial.preco}
+                    onChange={(e) => setNovoMaterial({ ...novoMaterial, preco: e.target.value })}
+                  />
+                </div>
+                <div className="stock-modal-field">
+                  <label>Unidade</label>
+                  <input
+                    type="text"
+                    value={novoMaterial.unidade}
+                    onChange={(e) => setNovoMaterial({ ...novoMaterial, unidade: e.target.value })}
+                  />
+                </div>
+                <div className="stock-modal-field">
+                  <label>Tipo</label>
+                  <input
+                    type="text"
+                    value={novoMaterial.tipo}
+                    onChange={(e) => setNovoMaterial({ ...novoMaterial, tipo: e.target.value })}
+                  />
+                </div>
 
-        <div className="stock-modal-actions">
-          <button type="button" className="stock-modal-cancel" onClick={() => setIsManualModalOpen(false)}>Cancelar</button>
-          <button
-            type="button"
-            className="stock-modal-save"
-            onClick={async () => {
-              try {
-                await axios.post(`${API_URL}/materials/manual`, {
-                  name: novoMaterial.nome,
-                  ncm: novoMaterial.ncm,
-                  unit: novoMaterial.unidade,
-                  unitCost: parseFloat(novoMaterial.preco),
-                  tipo: novoMaterial.tipo
-                });
-                await carregarMateriais(); // recarrega lista
-                setIsManualModalOpen(false);
-              } catch (err) {
-                console.error("Erro ao cadastrar manual:", err);
-                alert("Erro ao cadastrar manualmente");
-              }
-            }}
-          >
-            Salvar
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
+                <div className="stock-modal-actions">
+                  <button type="button" className="stock-modal-cancel" onClick={() => setIsManualModalOpen(false)}>Cancelar</button>
+                  <button
+                    type="button"
+                    className="stock-modal-save"
+                    onClick={async () => {
+                      try {
+                        await axios.post(`${API_URL}/materials/manual`, {
+                          name: novoMaterial.nome,
+                          ncm: novoMaterial.ncm,
+                          unit: novoMaterial.unidade,
+                          unitCost: parseFloat(novoMaterial.preco),
+                          tipo: novoMaterial.tipo
+                        });
+                        await carregarMateriais(); // recarrega lista
+                        setIsManualModalOpen(false);
+                      } catch (err) {
+                        console.error("Erro ao cadastrar manual:", err);
+                        alert("Erro ao cadastrar manualmente");
+                      }
+                    }}
+                  >
+                    Salvar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
 
         {/* Tabela */}
@@ -588,12 +609,6 @@ const [novoMaterial, setNovoMaterial] = useState({
                   <td>{materiaPrima.preco}</td>
                   <td>{materiaPrima.unidade}</td>
                   <td>{materiaPrima.tipo}</td>
-                  <td
-                    style={{ fontWeight: "600", cursor: "pointer", color: "#222222" }}
-                    onClick={() => abrirModalVariacao(materiaPrima.nome)}
-                  >
-                    {materiaPrima.variacao}
-                  </td>
                   <td>
                     <span style={{
                       backgroundColor: materiaPrima.possuiNF === "Sim" ? "#4CB340" : "#FD373C",
@@ -638,112 +653,6 @@ const [novoMaterial, setNovoMaterial] = useState({
               </tr>
             </tfoot>
           </table>
-
-          {/* Modal de variações */}
-          {isVariacaoModalOpen && (
-            <div className="stock-modal-overlay" onClick={fecharModalVariacao}>
-              <div className="stock-modal-content" style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
-                <h2>Variações</h2>
-                <ul className="variacoes-list">
-                  {variacoesSelecionadas.map((varia, i) => (
-                    <li key={i} className="variacao-item">
-                      <span>{varia.nome} — {varia.preco}</span>
-                      <div className="variacao-actions">
-                        <button
-                          className="variacao-select"
-                          onClick={async () => {
-                            try {
-                              await axios.put(`${API_URL}/materials/${varia._id}/set-official`);
-                              await carregarMateriais(); // recarrega lista já atualizada
-                              setIsVariacaoModalOpen(false);
-                            } catch (err) {
-                              console.error("Erro ao atualizar oficialidade:", err);
-                              alert("Erro ao atualizar oficialidade");
-                            }
-                          }}
-                        >
-                          Selecionar
-                        </button>
-
-
-                        <button
-                          className="variacao-edit"
-                          onClick={() => abrirModalEditarVariacao(i)}
-                        >
-                          <Icon icon="mdi:pencil" height="18" />
-                        </button>
-                        <button
-                          className="variacao-delete"
-                          onClick={async () => {
-                            try {
-                              await axios.delete(`${API_URL}/materials/${varia._id}`); // 👈 deleta no banco
-                              await carregarMateriais(); // recarrega lista do back atualizada
-                            } catch (err) {
-                              console.error("Erro ao deletar variação:", err);
-                              alert("Erro ao deletar variação");
-                            }
-                          }}
-                        >
-                          <Icon icon="mdi:delete" height="18" />
-                        </button>
-
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-
-                <button className="variacao-modal-close" onClick={fecharModalVariacao}>
-                  <Icon icon="mdi:close" height="24" />
-                </button>
-
-                {/* Modal interno para edição de variação */}
-                {isEditVariacaoModalOpen && (
-                  <div className="stock-modal-overlay" onClick={fecharModalEditarVariacao}>
-                    <div className="stock-modal-content" onClick={(e) => e.stopPropagation()}>
-                      <h2>Editar Variação</h2>
-                      <form>
-                        {["nome", "ncm", "preco", "unidade", "tipo", "variacao", "possuiNF", "adicionado"].map((campo) => (
-                          <div key={campo} className="stock-modal-field">
-                            <label>{campo === "nome" ? "Nome da matéria-prima" :
-                              campo === "ncm" ? "NCM" :
-                                campo === "preco" ? "Preço" :
-                                  campo === "unidade" ? "Unidade de medida" :
-                                    campo === "tipo" ? "Tipo" :
-                                      campo === "variacao" ? "Variação" :
-                                        campo === "possuiNF" ? "Possui NF?" :
-                                          campo === "adicionado" ? "Adicionado" : campo}</label>
-
-                            {campo === "possuiNF" ? (
-                              <select name={campo}>
-                                <option value="">Selecione</option>
-                                <option value="Sim">Sim</option>
-                                <option value="Não">Não</option>
-                              </select>
-                            ) : (
-                              <input type="text" name={campo} value="" />
-                            )}
-                          </div>
-                        ))}
-
-                        <div className="stock-modal-actions">
-                          <button
-                            className="stock-modal-cancel"
-                            type="button"
-                            onClick={fecharModalEditarVariacao}
-                          >
-                            Cancelar
-                          </button>
-                          <button className="stock-modal-save" type="button">
-                            Salvar
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -751,14 +660,32 @@ const [novoMaterial, setNovoMaterial] = useState({
         <div className="stock-modal-overlay">
           <div className="stock-modal-content">
             <h2>Editar matéria-prima</h2>
-            <form>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  await axios.put(`${API_URL}/materials/${selectedMaterial._id}`, {
+                    name: selectedMaterial.nome,
+                    ncm: selectedMaterial.ncm,
+                    unit: selectedMaterial.unidade,
+                    lastUnitCost: parseFloat(
+                      selectedMaterial.preco.replace("R$", "").replace(".", "").replace(",", ".")
+                    ),
+                    tipo: selectedMaterial.tipo,
+                    possuiNF: selectedMaterial.possuiNF
+                  });
+
+                  await carregarMateriais(); // recarrega a lista da tabela
+                  closeModal(); // fecha o modal
+                } catch (err) {
+                  console.error("Erro ao atualizar material:", err);
+                  alert("Erro ao salvar alterações.");
+                }
+              }}
+            >
               {Object.keys(selectedMaterial).map((campo) => {
-                // Ignora o campo "variacao"
-                if (campo === "variacao") return null;
+                const coluna = colunas.find((c) => c.chave === campo);
 
-                const coluna = colunas.find(c => c.chave === campo);
-
-                // Se for o campo "status" ou "possuiNF", renderiza um select
                 if (campo === "status" || campo === "possuiNF") {
                   return (
                     <div key={campo} className="stock-modal-field">
@@ -786,7 +713,6 @@ const [novoMaterial, setNovoMaterial] = useState({
                   );
                 }
 
-                // Para os outros campos, mantém o input normal
                 return (
                   <div key={campo} className="stock-modal-field">
                     <label>{coluna ? coluna.titulo : campo}</label>
@@ -813,6 +739,7 @@ const [novoMaterial, setNovoMaterial] = useState({
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}
