@@ -15,8 +15,8 @@ body {
 /* NAVBAR */
 .navbar {
   background-color: #FBFBFB;
-  height: 50px;
-  width: 225px;
+  height: 70px;
+  width: 285px;
   position: fixed;
   bottom: 20px;
   left: 50%;
@@ -352,7 +352,7 @@ body {
   opacity: 0.9;
 }
 
-.export-modal-close {
+.stock-modal-close {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -363,7 +363,7 @@ body {
   transition: color 0.3s;
 }
 
-.export-modal-close:hover {
+.stock-modal-close:hover {
   color: #797979;
 }
 
@@ -416,6 +416,7 @@ body {
 .stock-table-main td {
   padding: 1rem 2rem;
   text-align: center;
+  white-space: nowrap;
 }
 
 .stock-table-main tr:nth-child(even) {
@@ -483,7 +484,17 @@ body {
   padding: 20px;
   border-radius: 10px;
   width: 500px;
+  position: relative;
 }
+
+.stock-modal-content2 {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  width: 500px;
+  position: relative;
+}
+
 
 .stock-modal-content h2 {
   margin-bottom: 20px;
@@ -498,6 +509,19 @@ body {
 
 .stock-modal-content form input,
 .stock-modal-content form select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  outline: none;
+  border: 2px solid #E3E3E3;
+  margin-top: 3px;
+  margin-bottom: 15px;
+  font-family: 'Inter';
+  color: grey;
+}
+
+.stock-modal-content2 form input,
+.stock-modal-content2 form select {
   width: 100%;
   padding: 8px;
   border-radius: 5px;
@@ -530,6 +554,25 @@ body {
 }
 
 .stock-modal-cancel:hover {
+  background-color: #FD373C;
+  color: #f3f3f3;
+}
+
+.stock-modal-delete {
+  height: 40px;
+  width: 100px;
+  border: 0.15em solid #FD373C;
+  border-radius: 10px;
+  background-color: transparent;
+  font-weight: 600;
+  font-family: 'Inter';
+  color: #272727;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.stock-modal-delete:hover {
   background-color: #FD373C;
   color: #f3f3f3;
 }
@@ -584,6 +627,13 @@ body {
 }
 
 .stock-modal-content h3 {
+  font-weight: 300;
+  font-size: 15px;
+  margin-top: 30px;
+  color: #212020;
+}
+
+.stock-modal-content2 h3 {
   font-weight: 300;
   font-size: 15px;
   margin-top: 30px;
@@ -701,6 +751,10 @@ body {
   border-bottom: 1px solid #eee;
 }
 
+.variacao-actions {
+  display: flex;
+}
+
 .variacao-actions button {
   background: transparent;
   border: none;
@@ -711,6 +765,25 @@ body {
 
 .variacao-actions button:hover {
   transform: scale(1.2);
+}
+
+.variacao-select {
+  background: #FD373C !important;
+  color: white;
+  font-weight: 500;
+  border: none;
+  border-radius: 5px;
+  height: 20px;
+  line-height: 20px;
+  padding: 0 1rem;
+  cursor: pointer;
+  transition: all 0.1s ease-in-out!important; /* suavidade maior */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.variacao-select:hover {
+  background-color: #eb2e34 !important;
+  transform: none !important;
 }
 
 .variacao-actions svg {
@@ -786,4 +859,521 @@ body {
 
 .variacao-modal-close svg:hover {
   color: #797979;
+}
+
+/* Navbar Tooltip - Versão Corrigida */
+
+
+/* Container dos ícones - CORRIGIDO */
+.navbar-icon-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* REMOVA o padding geral e use apenas no ícone se necessário */
+}
+
+/* Estilo dos ícones */
+.navbar-content .iconify {
+  cursor: pointer;
+  transition: color 0.2s ease;
+  padding: 8px; /* Move o padding para o ícone em vez do container */
+  border-radius: 8px; /* Opcional: para área de hover */
+}
+
+.navbar-content .active {
+  color: #007bff;
+}
+
+.navbar-icon-container:hover .iconify {
+  color: #ff0000;
+  background: rgba(0, 123, 255, 0.1); /* Opcional: fundo ao hover */
+}
+
+/* TOOLTIP */
+.navbar-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 16px;
+  white-space: nowrap;
+  z-index: 1001;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+/* Seta do tooltip */
+.navbar-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #333;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Garantir que não haja overflow */
+.navbar-icon-container {
+  overflow: visible;
+}
+
+
+
+
+/* Estilos para campos readonly */
+.stock-modal-field input[readonly] {
+  background-color: #f5f5f5 !important;
+  color: #666 !important;
+  border: 1px solid #ddd !important;
+  cursor: not-allowed;
+}
+
+.stock-modal-field input[readonly]:focus {
+  outline: none;
+  border-color: #ddd !important;
+  box-shadow: none !important;
+}
+
+/* Modal Content Ajustado */
+.stock-modal-content {
+  max-width: 500px !important;
+  width: 95vw !important;
+  margin: 2rem auto;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Tabela Expandida */
+.materials-table-container {
+  min-width: 100%;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  background: white;
+  overflow-x: auto; /* Permite scroll horizontal se necessário */
+}
+
+.materials-table {
+  width: 100%;
+  min-width: 800px; /* Garante largura mínima */
+  border-collapse: collapse;
+}
+
+.materials-table th,
+.materials-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #f1f3f4;
+  white-space: nowrap; /* Evita quebra de linha */
+}
+
+/* Colunas com larguras específicas */
+.materials-table th:nth-child(1), /* Material */
+.materials-table td:nth-child(1) {
+  width: 40%;
+  min-width: 200px;
+}
+
+.materials-table th:nth-child(2), /* Quantidade */
+.materials-table td:nth-child(2) {
+  width: 15%;
+  min-width: 120px;
+}
+
+.materials-table th:nth-child(3), /* Preço Unit. */
+.materials-table td:nth-child(3) {
+  width: 15%;
+  min-width: 120px;
+}
+
+.materials-table th:nth-child(4), /* Total */
+.materials-table td:nth-child(4) {
+  width: 15%;
+  min-width: 120px;
+}
+
+.materials-table th:nth-child(5), /* Ações */
+.materials-table td:nth-child(5) {
+  width: 15%;
+  min-width: 100px;
+}
+
+/* Input de quantidade mais largo */
+.quantity-input {
+  width: 100%;
+  min-width: 80px;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+/* Material Info mais espaçoso */
+.material-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 1rem;
+}
+
+.material-name {
+  font-weight: 500;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.material-unit {
+  font-size: 0.8rem;
+  color: #666;
+  background: #f1f3f4;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+/* Header do modal mais compacto */
+.modal-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.modal-header h2 {
+  margin: 0 0 0.25rem 0;
+  color: #333;
+  font-size: 1.4rem;
+}
+
+.product-name {
+  margin: 0;
+  color: #666;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* Seção de adicionar material mais compacta */
+.add-material-section {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e9ecef;
+}
+
+.add-material-section h3 {
+  margin: 0 0 0.75rem 0;
+  color: #495057;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Select mais compacto */
+.material-select {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: white;
+  transition: all 0.2s;
+}
+
+/* Responsivo para telas menores */
+@media (max-width: 1024px) {
+  .stock-modal-content {
+    width: 98vw !important;
+    margin: 1rem auto;
+  }
+
+  .materials-table {
+    min-width: 700px;
+  }
+}
+
+@media (max-width: 768px) {
+  .stock-modal-content {
+    width: 100vw !important;
+    height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    max-height: 100vh;
+  }
+
+  .materials-table-container {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
+
+/* Modal Content */
+.stock-modal-content2 {
+  max-width: 900px !important;
+  width: 95vw !important;
+  margin: 2rem auto;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+/* Modal Header */
+.modal-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eaeaea;
+}
+
+.modal-header h2 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.product-name {
+  margin: 0;
+  color: #666;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+/* Add Material Section */
+.add-material-section {
+  background: #f8f9fa;
+  padding: 1.25rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e9ecef;
+}
+
+.add-material-section h3 {
+  margin: 0 0 1rem 0;
+  color: #495057;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.material-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: white;
+  transition: all 0.2s;
+}
+
+.material-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Materials Table */
+.materials-table-container {
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  background: white;
+}
+
+.materials-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.materials-table th {
+  background: #f8f9fa;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.materials-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.material-row:hover {
+  background: #f8f9fa;
+}
+
+.material-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.material-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.material-unit {
+  font-size: 0.85rem;
+  color: #666;
+  background: #f1f3f4;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.quantity-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.quantity-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.price-cell, .total-cell {
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+.total-cell {
+  font-weight: 600;
+  color: #2e7d32;
+}
+
+.actions-cell {
+  text-align: center;
+}
+
+.remove-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-btn:hover {
+  background: #c82333;
+  transform: scale(1.05);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #999;
+}
+
+.empty-state p {
+  margin: 1rem 0 0 0;
+  font-size: 1rem;
+}
+
+/* Summary */
+.materials-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e9ecef;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.summary-item span {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.summary-item strong {
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.total-cost {
+  color: #2e7d32 !important;
+  font-size: 1.3rem !important;
+}
+
+/* Modal Actions */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eaeaea;
+}
+
+.btn-cancel {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #6c757d;
+  background: white;
+  color: #6c757d;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-save {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  background: #ff0000;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.btn-save:hover {
+  background: #b31800;
+  transform: translateY(-1px);
 }

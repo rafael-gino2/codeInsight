@@ -32,14 +32,15 @@ export default function MateriasPrimas() {
   // ---------------- FUNÇÕES DE PESQUISA ----------------
   const materiaisFiltrados = materiais
     .filter((materia) =>
-      materia.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      materia.ncm.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      materia.preco.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      materia.unidade.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      materia.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      materia.possuiNF.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      materia.adicionado.toLowerCase().includes(searchTerm.toLowerCase())
+      (materia.nome?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (materia.ncm?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (materia.preco?.toString() || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (materia.unidade?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (materia.tipo?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (materia.possuiNF?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (materia.adicionado?.toLowerCase() || "").includes(searchTerm.toLowerCase())
     )
+
     .filter((materia) =>
       filtros.tipo ? materia.tipo === filtros.tipo : true
     )
@@ -100,7 +101,21 @@ export default function MateriasPrimas() {
       const formData = new FormData();
       formData.append("file", file);
 
-      await axios.post(`${API_URL}/upload/invoice-xml`, formData, {
+      const name = file.name.toLowerCase();
+      let uploadUrl = '';
+
+      if (name.endsWith('.xml')) {
+        uploadUrl = `${API_URL}/upload/invoice-xml`;
+      } else if (name.endsWith('.pdf')) {
+        uploadUrl = `${API_URL}/upload/invoice-pdf`;
+      } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+        uploadUrl = `${API_URL}/upload/initial-excel`;   // 👈 rota do backend para Excel
+      } else {
+        alert('Tipo de arquivo não suportado. Use XML, PDF ou Excel.');
+        return;
+      }
+
+      await axios.post(uploadUrl, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
           const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -110,46 +125,13 @@ export default function MateriasPrimas() {
         }
       });
 
-      // depois que enviar, carrega os materiais reais
-      await carregarMateriais();
+      await carregarMateriais();   // recarrega a lista
 
     } catch (err) {
       console.error("Erro no upload:", err);
-      alert("Erro ao enviar XML.");
+      alert("Erro ao enviar arquivo.");
     }
   };
-
-
-  const handlePdfChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const novoArquivo = { nome: file.name, progresso: 0 };
-    setArquivosCarregados(prev => [...prev, novoArquivo]);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      await axios.post(`${API_URL}/upload/invoice-pdf`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setArquivosCarregados(prev =>
-            prev.map(f => f.nome === file.name ? { ...f, progresso: percent } : f)
-          );
-        }
-      });
-
-      // recarregar lista de materiais
-      await carregarMateriais();
-
-    } catch (err) {
-      console.error("Erro no upload PDF:", err);
-      alert("Erro ao enviar PDF.");
-    }
-  };
-
 
 
   // ---------------- ORDENAR ----------------
@@ -183,7 +165,6 @@ export default function MateriasPrimas() {
     { chave: "ncm", titulo: "NCM" },
     { chave: "preco", titulo: "Preço" },
     { chave: "unidade", titulo: "Unidade de medida" },
-    { chave: "tipo", titulo: "Tipo" },
     { chave: "possuiNF", titulo: "Possui NF?" },
     { chave: "adicionado", titulo: "Adicionado" }
   ];
@@ -224,7 +205,7 @@ export default function MateriasPrimas() {
     let y = 30;
     materiaisFiltrados.forEach((m, index) => {
       doc.text(
-        `${index + 1}. ${m.nome} - ${m.ncm} - ${m.preco} - ${m.unidade} - ${m.tipo} - ${m.possuiNF} - ${m.adicionado}`,
+        `${index + 1}. ${m.nome} - ${m.ncm} - ${m.preco} - ${m.unidade} - ${m.possuiNF} - ${m.adicionado}`,
         14,
         y
       );
@@ -242,50 +223,30 @@ export default function MateriasPrimas() {
   const carregarMateriais = async () => {
     try {
       const res = await axios.get(`${API_URL}/materials`);
-      const lista = res.data; // já vem agrupado: [{ principal, variacoes }]
+      const lista = res.data;
 
-      const todosMateriais = [];
+      console.log('Dados recebidos do backend:', lista); // 👈 PARA DEBUG
 
-      lista.forEach(grupo => {
-        if (grupo.principal) {
-          const principal = grupo.principal;
+      // 👇 AGORA O BACKEND RETORNA UM ARRAY SIMPLES, NÃO PRECISA PROCESSAR AGRUPAMENTO
+      const todosMateriais = lista.map(material => ({
+        _id: material._id,
+        nome: material.name || material.nomeExcel,
+        ncm: material.ncm || material.ncmExcel,
+        preco: parseFloat(material.lastUnitCost || material.unitCostExcel || 0),
+        unidade: material.unit || material.unidadeExcel || "",
+        tipo: material.tipo || material.tipoExcel || "",
+        possuiNF: (material.possuiNF || material.possuiNFExcel) ? "Sim" : "Não",
+        adicionado: material.createdAt ? new Date(material.createdAt).toLocaleDateString("pt-BR") : new Date().toLocaleDateString("pt-BR")
+      }));
 
-          // adiciona o principal
-          todosMateriais.push({
-            _id: principal._id,
-            nome: principal.name,
-            ncm: principal.ncm,
-            preco: `R$ ${principal.lastUnitCost.toFixed(2)}`,
-            unidade: principal.unit,
-            tipo: "Padrão",
-            possuiNF: "Sim",
-            adicionado: new Date().toLocaleDateString("pt-BR")
-          });
 
-          // adiciona cada variação já logo abaixo
-          if (grupo.variacoes && grupo.variacoes.length > 0) {
-            grupo.variacoes.forEach(v => {
-              todosMateriais.push({
-                _id: v._id,
-                nome: v.name,
-                ncm: v.ncm || "-", // se não tiver NCM na variação
-                preco: `R$ ${v.lastUnitCost.toFixed(2)}`,
-                unidade: v.unit || principal.unit, // usa a mesma unidade se não tiver
-                tipo: "Variação",
-                possuiNF: "Sim",
-                adicionado: new Date().toLocaleDateString("pt-BR")
-              });
-            });
-          }
-        }
-      });
 
+      console.log('Materiais processados:', todosMateriais); // 👈 PARA DEBUG
       setMateriais(todosMateriais);
     } catch (err) {
       console.error("Erro ao carregar materiais:", err);
     }
   };
-
 
   return (
     <div>
@@ -429,40 +390,23 @@ export default function MateriasPrimas() {
                   <h2>Carregar Nota Fiscal</h2>
 
                   <div className="stock-modal-field">
-                    {/* Upload XML */}
+                    {/* Upload único PDF ou XML */}
                     <input
-                      id="fileInputXml"
+                      id="fileInput"
                       type="file"
-                      accept=".xml"
+                      accept=".xml, .pdf, .xlsx, .xls"   // 👈 agora aceita Excel também
                       style={{ display: "none" }}
                       onChange={handleFileChange}
                     />
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById("fileInputXml").click()}
-                      className="stock-modal-load"
-                    >
-                      <img src={loadIcon} alt="Load Icon" />
-                      <p><span>Clique para carregar</span> ou arraste e solte</p>
-                      <p>seu arquivo <span>XML</span></p>
-                    </button>
 
-                    {/* Upload PDF */}
-                    <input
-                      id="fileInputPdf"
-                      type="file"
-                      accept=".pdf"
-                      style={{ display: "none" }}
-                      onChange={handlePdfChange}
-                    />
                     <button
                       type="button"
-                      onClick={() => document.getElementById("fileInputPdf").click()}
+                      onClick={() => document.getElementById("fileInput").click()}
                       className="stock-modal-load"
                     >
                       <img src={loadIcon} alt="Load Icon" />
                       <p><span>Clique para carregar</span> ou arraste e solte</p>
-                      <p>seu arquivo <span>PDF</span></p>
+                      <p>seu arquivo <span>XML</span> ou <span>PDF</span></p>
                     </button>
 
                     {/* Lista de arquivos carregados */}
@@ -541,16 +485,9 @@ export default function MateriasPrimas() {
                     onChange={(e) => setNovoMaterial({ ...novoMaterial, unidade: e.target.value })}
                   />
                 </div>
-                <div className="stock-modal-field">
-                  <label>Tipo</label>
-                  <input
-                    type="text"
-                    value={novoMaterial.tipo}
-                    onChange={(e) => setNovoMaterial({ ...novoMaterial, tipo: e.target.value })}
-                  />
-                </div>
 
                 <div className="stock-modal-actions">
+
                   <button type="button" className="stock-modal-cancel" onClick={() => setIsManualModalOpen(false)}>Cancelar</button>
                   <button
                     type="button"
@@ -562,7 +499,6 @@ export default function MateriasPrimas() {
                           ncm: novoMaterial.ncm,
                           unit: novoMaterial.unidade,
                           unitCost: parseFloat(novoMaterial.preco),
-                          tipo: novoMaterial.tipo
                         });
                         await carregarMateriais(); // recarrega lista
                         setIsManualModalOpen(false);
@@ -606,20 +542,22 @@ export default function MateriasPrimas() {
                 <tr key={index}>
                   <td>{materiaPrima.nome}</td>
                   <td>{materiaPrima.ncm}</td>
-                  <td>{materiaPrima.preco}</td>
+                  <td>{`R$ ${materiaPrima.preco.toFixed(2).replace(".", ",")}`}</td>
                   <td>{materiaPrima.unidade}</td>
-                  <td>{materiaPrima.tipo}</td>
                   <td>
-                    <span style={{
-                      backgroundColor: materiaPrima.possuiNF === "Sim" ? "#4CB340" : "#FD373C",
-                      color: "#fff",
-                      padding: "0.2rem 1rem",
-                      borderRadius: "4px",
-                      display: "inline-block",
-                      width: "120px"
-                    }}>
+                    <span
+                      style={{
+                        backgroundColor: materiaPrima.possuiNF === "Sim" ? "#4CB340" : "#FD373C",
+                        color: "#fff",
+                        padding: "0.2rem 1rem",
+                        borderRadius: "4px",
+                        display: "inline-block",
+                        width: "120px"
+                      }}
+                    >
                       {materiaPrima.possuiNF}
                     </span>
+
                   </td>
                   <td className="stock-adicionado-td">
                     {materiaPrima.adicionado}
@@ -668,63 +606,64 @@ export default function MateriasPrimas() {
                     name: selectedMaterial.nome,
                     ncm: selectedMaterial.ncm,
                     unit: selectedMaterial.unidade,
-                    lastUnitCost: parseFloat(
-                      selectedMaterial.preco.replace("R$", "").replace(".", "").replace(",", ".")
-                    ),
-                    tipo: selectedMaterial.tipo,
-                    possuiNF: selectedMaterial.possuiNF
+                    lastUnitCost: selectedMaterial.preco,
+                    // Remove tipo e possuiNF do envio se não quiser atualizá-los
                   });
 
-                  await carregarMateriais(); // recarrega a lista da tabela
-                  closeModal(); // fecha o modal
+                  await carregarMateriais();
+                  closeModal();
                 } catch (err) {
                   console.error("Erro ao atualizar material:", err);
                   alert("Erro ao salvar alterações.");
                 }
               }}
             >
-              {Object.keys(selectedMaterial).map((campo) => {
-                const coluna = colunas.find((c) => c.chave === campo);
+              {/* Campos que você QUER mostrar */}
+              <div className="stock-modal-field">
+                <label>Nome da matéria-prima</label>
+                <input
+                  type="text"
+                  name="nome"
+                  value={selectedMaterial.nome}
+                  onChange={handleInputChange}
+                />
+              </div>
 
-                if (campo === "status" || campo === "possuiNF") {
-                  return (
-                    <div key={campo} className="stock-modal-field">
-                      <label>{coluna ? coluna.titulo : campo}</label>
-                      <select
-                        name={campo}
-                        value={selectedMaterial[campo]}
-                        onChange={handleInputChange}
-                      >
-                        {campo === "status" && (
-                          <>
-                            <option value="Em estoque">Em estoque</option>
-                            <option value="Fora de estoque">Fora de estoque</option>
-                            <option value="Pendente">Pendente</option>
-                          </>
-                        )}
-                        {campo === "possuiNF" && (
-                          <>
-                            <option value="Sim">Sim</option>
-                            <option value="Não">Não</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                  );
-                }
+              <div className="stock-modal-field">
+                <label>NCM</label>
+                <input
+                  type="text"
+                  name="ncm"
+                  value={selectedMaterial.ncm}
+                  onChange={handleInputChange}
+                />
+              </div>
 
-                return (
-                  <div key={campo} className="stock-modal-field">
-                    <label>{coluna ? coluna.titulo : campo}</label>
-                    <input
-                      type="text"
-                      name={campo}
-                      value={selectedMaterial[campo]}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                );
-              })}
+              <div className="stock-modal-field">
+                <label>Preço</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  name="preco"
+                  value={selectedMaterial.preco}
+                  onChange={(e) =>
+                    setSelectedMaterial({
+                      ...selectedMaterial,
+                      preco: parseFloat(e.target.value) || 0
+                    })
+                  }
+                />
+              </div>
+
+              <div className="stock-modal-field">
+                <label>Unidade de medida</label>
+                <input
+                  type="text"
+                  name="unidade"
+                  value={selectedMaterial.unidade}
+                  onChange={handleInputChange}
+                />
+              </div>
 
               <div className="stock-modal-actions">
                 <button
@@ -739,7 +678,6 @@ export default function MateriasPrimas() {
                 </button>
               </div>
             </form>
-
           </div>
         </div>
       )}

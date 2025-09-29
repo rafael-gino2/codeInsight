@@ -2,6 +2,8 @@
 
 Este projeto tem como objetivo o desenvolvimento de uma **calculadora de custo de produto** com uma **interface simples e intuitiva**, integrando um banco de dados de matérias-primas que pode ser atualizado dinamicamente através de lançamentos de notas fiscais.
 
+**O código está em manutenção, e em breve estará melhor organizado**
+
 ---
 
 ## 🚀 Tecnologias Utilizadas
