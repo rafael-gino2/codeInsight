@@ -784,4 +784,188 @@ app.get('/batches/:materialId', async (req, res) => {
 });
 
 
+//GRAFICOS
+
+app.get("/dashboard/unit-cost-evolution", async (req, res) => {
+  try {
+    const data = await Batch.aggregate([
+      {
+        $group: {
+          _id: {
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+            material: "$material"
+          },
+          avgUnitCost: { $avg: "$unitCost" }
+        }
+      },
+      {
+        $lookup: {
+          from: "materials",
+          localField: "_id.material",
+          foreignField: "_id",
+          as: "materialData"
+        }
+      },
+      {
+        $unwind: "$materialData"
+      },
+      {
+        $project: {
+          date: "$_id.date",
+          material: "$materialData.name",
+          avgUnitCost: 1,
+          _id: 0
+        }
+      },
+      { $sort: { date: 1 } }
+    ]);
+
+    res.json(data);
+  } catch (err) {
+    console.error("Erro no endpoint /dashboard/unit-cost-evolution:", err);
+    res.status(500).json({ error: "Erro ao buscar evolução de custo unitário" });
+  }
+});
+
+
+// Rota que retorna, para cada material, o lote mais recente (date, qty, unitCost, total, name)
+app.get("/dashboard/recent-batches", async (req, res) => {
+  try {
+    const data = await Batch.aggregate([
+      // ordena por data decrescente para garantir que $first pegue o mais recente
+      { $sort: { date: -1, _id: -1 } },
+
+      // junta com material
+      {
+        $lookup: {
+          from: "materials",
+          localField: "material",
+          foreignField: "_id",
+          as: "materialData"
+        }
+      },
+      { $unwind: "$materialData" },
+
+      // agrupa por material pegando o primeiro (mais recente)
+      {
+        $group: {
+          _id: "$material",
+          date: { $first: "$date" },
+          qty: { $first: "$qty" },
+          unitCost: { $first: "$unitCost" },
+          invoiceRef: { $first: "$invoiceRef" },
+          name: { $first: "$materialData.name" }
+        }
+      },
+
+      // formato de saída
+      {
+        $project: {
+          materialId: "$_id",
+          name: 1,
+          date: 1,
+          qty: 1,
+          unitCost: 1,
+          invoiceRef: 1,
+          _id: 0
+        }
+      },
+
+      // ordena por data pra retornar mais recentes primeiro
+      { $sort: { date: -1 } }
+    ]);
+
+    res.json(data);
+  } catch (err) {
+    console.error("Erro /dashboard/recent-batches:", err);
+    res.status(500).json({ error: "Erro ao buscar recent-batches" });
+  }
+});
+
+app.get("/dashboard/percentual-chart", async (req, res) => {
+  try {
+    // isso simula a média geral, mas você pode ajustar por produto
+    const data = await Batch.aggregate([
+      {
+        $lookup: {
+          from: "materials",
+          localField: "material",
+          foreignField: "_id",
+          as: "mat"
+        }
+      },
+      { $unwind: "$mat" },
+      {
+        $group: {
+          _id: "$mat.name",
+          unitCost: { $avg: "$unitCost" }
+        }
+      }
+    ]);
+
+    // simula os preços
+    const result = data.map(d => {
+      const productPrice = d.unitCost / 0.6;
+      const percent_raw = (d.unitCost / productPrice) * 100;
+      return {
+        "Componente": d._id,
+        "Preço Médio (R$)": productPrice,
+        "Percentual (%)": percent_raw
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("Erro /dashboard/percentual-chart:", err);
+    res.status(500).json({ error: "Erro ao calcular percentual" });
+  }
+});
+
+app.get("/dashboard/percentual-chart/:material", async (req, res) => {
+  try {
+    const { material } = req.params;
+
+    const data = await Batch.aggregate([
+      {
+        $lookup: {
+          from: "materials",
+          localField: "material",
+          foreignField: "_id",
+          as: "mat"
+        }
+      },
+      { $unwind: "$mat" },
+      {
+        $match: { "mat.name": material }  // 🔑 filtra só o material selecionado
+      },
+      {
+        $group: {
+          _id: "$mat.name",
+          unitCost: { $avg: "$unitCost" }
+        }
+      }
+    ]);
+
+    if (!data.length) {
+      return res.json([]);
+    }
+
+    const result = data.map(d => {
+      const productPrice = d.unitCost / 0.6;
+      const percent_raw = (d.unitCost / productPrice) * 100;
+      return {
+        "Componente": d._id,
+        "Preço Médio (R$)": productPrice,
+        "Percentual (%)": percent_raw
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("Erro /dashboard/percentual-chart/:material:", err);
+    res.status(500).json({ error: "Erro ao calcular percentual" });
+  }
+});
+
+
 app.listen(PORT, () => console.log(`API on http://localhost:${PORT}`));
